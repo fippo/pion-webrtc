@@ -70,7 +70,7 @@ func (t *ICETransport) GetSelectedCandidatePair() (*ICECandidatePair, error) {
 }
 
 // GetSelectedCandidatePairStats returns the selected candidate pair stats on which packets are sent
-// if there is no selected pair empty stats, false is returned to indicate stats not available.
+// if there is no selected pair, false is returned to indicate stats are not available.
 func (t *ICETransport) GetSelectedCandidatePairStats() (ICECandidatePairStats, bool) {
 	return t.gatherer.getSelectedCandidatePairStats()
 }
@@ -140,18 +140,21 @@ func (t *ICETransport) Start(gatherer *ICEGatherer, params ICEParameters, role *
 
 	// Drop the lock here to allow ICE candidates to be
 	// added so that the agent can complete a connection
+	// TODO: without blocking we could keep the lock a bit longer
+	// until awaiting the handshake.
 	t.lock.Unlock()
 
 	var iceConn *ice.Conn
 	var err error
+	// TODO: depending on whether SPED is used, use the blocking/Nonblocking variant.
 	switch *role {
 	case ICERoleControlling:
-		iceConn, err = agent.Dial(ctx,
+		iceConn, err = agent.DialNonBlocking(ctx,
 			params.UsernameFragment,
 			params.Password)
 
 	case ICERoleControlled:
-		iceConn, err = agent.Accept(ctx,
+		iceConn, err = agent.AcceptNonBlocking(ctx,
 			params.UsernameFragment,
 			params.Password)
 
@@ -451,4 +454,18 @@ func (t *ICETransport) setRemoteCredentials(newUfrag, newPwd string) error {
 	}
 
 	return agent.SetRemoteCredentials(newUfrag, newPwd)
+}
+
+// Piggyback forwards a raw packet to the ICE Agent
+func (t *ICETransport) Piggyback(packet []byte) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	agent := t.gatherer.getAgent()
+	if agent == nil {
+		t.log.Warnf("%w: unable to Piggyback", errICEAgentNotExist)
+		return
+	}
+
+	agent.Piggyback(packet)
 }

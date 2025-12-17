@@ -304,7 +304,7 @@ func (t *DTLSTransport) role() DTLSRole {
 func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:gocognit,cyclop
 	// Take lock and prepare connection, we must not hold the lock
 	// when connecting
-	prepareTransport := func() (DTLSRole, *dtls.Config, error) {
+	prepareTransport := func(dtlsEndpoint *mux.Endpoint, iceTransport *ICETransport) (DTLSRole, *dtls.Config, error) {
 		t.lock.Lock()
 		defer t.lock.Unlock()
 
@@ -342,13 +342,24 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 			InsecureSkipVerify: !t.api.settingEngine.dtls.disableInsecureSkipVerify,
 			CipherSuites:       t.api.settingEngine.dtls.cipherSuites,
 			CustomCipherSuites: t.api.settingEngine.dtls.customCipherSuites,
+			HandshakePacketInterceptor: func(packet []byte) bool {
+				// fmt.Println("---", "OUTGOING HANDSHAKE PACKET", len(packet), "---", time.Now())
+				// fmt.Println(hex.Dump(packet))
+                // Do the writing ourselves. Actually we want to hand this over to the IceTransport...
+                // dtlsEndpoint.Write(packet)
+
+                // Forward the packet to the ICE transport for piggybacking.
+                iceTransport.Piggyback(packet)
+
+				return true
+			},
 		}, nil
 	}
 
 	var dtlsConn *dtls.Conn
 	dtlsEndpoint := t.iceTransport.newEndpoint(mux.MatchDTLS)
 	dtlsEndpoint.SetOnClose(t.internalOnCloseHandler)
-	role, dtlsConfig, err := prepareTransport()
+	role, dtlsConfig, err := prepareTransport(dtlsEndpoint, t.iceTransport)
 	if err != nil {
 		return err
 	}
@@ -443,6 +454,7 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 
 	t.conn = dtlsConn
 	t.onStateChange(DTLSTransportStateConnected)
+    t.iceTransport.Piggyback(nil)
 
 	return t.startSRTP()
 }
