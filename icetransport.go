@@ -40,6 +40,8 @@ type ICETransport struct {
 
 	loggerFactory logging.LoggerFactory
 
+	dtlsCallback func(packet []byte)
+
 	log logging.LeveledLogger
 }
 
@@ -108,6 +110,7 @@ func (t *ICETransport) Start(gatherer *ICEGatherer, params ICEParameters, role *
 	if agent == nil {
 		return fmt.Errorf("%w: unable to start ICETransport", errICEAgentNotExist)
 	}
+	agent.SetDtlsCallback(t.dtlsCallback)
 
 	if err := agent.OnConnectionStateChange(func(iceState ice.ConnectionState) {
 		state := newICETransportStateFromICE(iceState)
@@ -182,6 +185,16 @@ func (t *ICETransport) Start(gatherer *ICEGatherer, params ICEParameters, role *
 	t.mux = mux.NewMux(config)
 
 	return nil
+}
+
+func (t *ICETransport) SetDtlsCallback(cb func(packet []byte)) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+	if agent := t.gatherer.getAgent(); agent != nil {
+		agent.SetDtlsCallback(cb)
+	} else {
+		t.dtlsCallback = cb
+	}
 }
 
 // restart is not exposed currently because ORTC has users create a whole new ICETransport

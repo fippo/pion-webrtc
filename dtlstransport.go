@@ -345,11 +345,11 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 			HandshakePacketInterceptor: func(packet []byte) bool {
 				// fmt.Println("---", "OUTGOING HANDSHAKE PACKET", len(packet), "---", time.Now())
 				// fmt.Println(hex.Dump(packet))
-                // Do the writing ourselves. Actually we want to hand this over to the IceTransport...
-                // dtlsEndpoint.Write(packet)
+				// Do the writing ourselves. Actually we want to hand this over to the IceTransport...
+				// dtlsEndpoint.Write(packet)
 
-                // Forward the packet to the ICE transport for piggybacking.
-                iceTransport.Piggyback(packet)
+				// Forward the packet to the ICE transport for piggybacking.
+				iceTransport.Piggyback(packet)
 
 				return true
 			},
@@ -411,12 +411,19 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 		dtlsConn, err = dtls.Server(dtlsEndpoint, dtlsEndpoint.RemoteAddr(), dtlsConfig)
 	}
 
+	// Set up SPED.
+	t.iceTransport.SetDtlsCallback(func(packet []byte) {
+		dtlsConn.InjectPacket(packet)
+	})
+
+	// This awaits the DTLS handshake.
 	if err == nil {
 		if t.api.settingEngine.dtls.connectContextMaker != nil {
 			handshakeCtx, _ := t.api.settingEngine.dtls.connectContextMaker()
 			err = dtlsConn.HandshakeContext(handshakeCtx)
 		} else {
 			err = dtlsConn.Handshake()
+			fmt.Println("HANDSHAKE COMPLETE")
 		}
 	}
 
@@ -454,7 +461,8 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 
 	t.conn = dtlsConn
 	t.onStateChange(DTLSTransportStateConnected)
-    t.iceTransport.Piggyback(nil)
+	t.iceTransport.Piggyback(nil)
+	t.iceTransport.SetDtlsCallback(nil)
 
 	return t.startSRTP()
 }
