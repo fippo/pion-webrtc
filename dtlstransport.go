@@ -349,9 +349,7 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 				// dtlsEndpoint.Write(packet)
 
 				// Forward the packet to the ICE transport for piggybacking.
-				iceTransport.Piggyback(packet)
-
-				return true
+				return iceTransport.Piggyback(packet)
 			},
 		}, nil
 	}
@@ -423,7 +421,7 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 			err = dtlsConn.HandshakeContext(handshakeCtx)
 		} else {
 			err = dtlsConn.Handshake()
-			fmt.Println("HANDSHAKE COMPLETE")
+			fmt.Println("HANDSHAKE COMPLETE", role)
 		}
 	}
 

@@ -470,15 +470,15 @@ func (t *ICETransport) setRemoteCredentials(newUfrag, newPwd string) error {
 }
 
 // Piggyback forwards a raw packet to the ICE Agent
-func (t *ICETransport) Piggyback(packet []byte) {
+func (t *ICETransport) Piggyback(packet []byte) bool {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 
 	agent := t.gatherer.getAgent()
 	if agent == nil {
 		t.log.Warnf("%w: unable to Piggyback", errICEAgentNotExist)
-		return
+		return false
 	}
 
-	agent.Piggyback(packet)
+	return agent.Piggyback(packet)
 }
