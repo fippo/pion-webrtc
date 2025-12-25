@@ -342,15 +342,6 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 			InsecureSkipVerify: !t.api.settingEngine.dtls.disableInsecureSkipVerify,
 			CipherSuites:       t.api.settingEngine.dtls.cipherSuites,
 			CustomCipherSuites: t.api.settingEngine.dtls.customCipherSuites,
-			HandshakePacketInterceptor: func(packet []byte) bool {
-				// fmt.Println("---", "OUTGOING HANDSHAKE PACKET", len(packet), "---", time.Now())
-				// fmt.Println(hex.Dump(packet))
-				// Do the writing ourselves. Actually we want to hand this over to the IceTransport...
-				// dtlsEndpoint.Write(packet)
-
-				// Forward the packet to the ICE transport for piggybacking.
-				return iceTransport.Piggyback(packet)
-			},
 		}, nil
 	}
 
@@ -370,8 +361,10 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 		dtlsConfig.ClientAuth = *t.api.settingEngine.dtls.clientAuth
 	}
 
+	// TODO: should this be set to "one day" for SPED?
 	dtlsConfig.FlightInterval = t.api.settingEngine.dtls.retransmissionInterval
-	dtlsConfig.InsecureSkipVerifyHello = t.api.settingEngine.dtls.insecureSkipHelloVerify
+	// TODO: this should be the default, DTLS runs over ICE which *hopefully* checks the source.
+	dtlsConfig.InsecureSkipVerifyHello = true // t.api.settingEngine.dtls.insecureSkipHelloVerify
 	dtlsConfig.EllipticCurves = t.api.settingEngine.dtls.ellipticCurves
 	dtlsConfig.ExtendedMasterSecret = t.api.settingEngine.dtls.extendedMasterSecret
 	dtlsConfig.ClientCAs = t.api.settingEngine.dtls.clientCAs
@@ -401,6 +394,14 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 		return t.validateFingerPrint(parsedRemoteCert)
 	}
 
+	// Configure DTLS for SPED.
+	if t.api.settingEngine.enableSped {
+		dtlsConfig.HandshakePacketInterceptor = func(packet []byte) bool {
+			// Forward the packet to the ICE transport for piggybacking.
+			return t.iceTransport.Piggyback(packet)
+		}
+	}
+
 	// Connect as DTLS Client/Server, function is blocking and we
 	// must not hold the DTLSTransport lock
 	if role == DTLSRoleClient {
@@ -409,10 +410,12 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 		dtlsConn, err = dtls.Server(dtlsEndpoint, dtlsEndpoint.RemoteAddr(), dtlsConfig)
 	}
 
-	// Set up SPED.
-	t.iceTransport.SetDtlsCallback(func(packet []byte) {
-		dtlsConn.InjectPacket(packet)
-	})
+	// Configure ICE for SPED after we created the DTLS transport.
+	if t.api.settingEngine.enableSped {
+		t.iceTransport.SetDtlsCallback(func(packet []byte) {
+			dtlsConn.InjectPacket(packet)
+		})
+	}
 
 	// This awaits the DTLS handshake.
 	if err == nil {
@@ -459,8 +462,10 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 
 	t.conn = dtlsConn
 	t.onStateChange(DTLSTransportStateConnected)
-	t.iceTransport.Piggyback(nil)
-	t.iceTransport.SetDtlsCallback(nil)
+	if t.api.settingEngine.enableSped {
+		t.iceTransport.Piggyback(nil)
+		t.iceTransport.SetDtlsCallback(nil)
+	}
 
 	return t.startSRTP()
 }

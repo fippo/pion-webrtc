@@ -841,7 +841,13 @@ func TestICETrickleCapabilityString(t *testing.T) {
 }
 
 func TestWarp(t *testing.T) {
-	offer, answer, err := newPair()
+	s := SettingEngine{}
+	s.EnableSped(true)
+	api := NewAPI(WithSettingEngine(s))
+
+	offer, err := api.NewPeerConnection(Configuration{})
+	assert.NoError(t, err)
+	answer, err := api.NewPeerConnection(Configuration{})
 	assert.NoError(t, err)
 
 	peerConnectionsConnected := untilConnectionState(PeerConnectionStateConnected, offer, answer)

@@ -143,26 +143,33 @@ func (t *ICETransport) Start(gatherer *ICEGatherer, params ICEParameters, role *
 
 	// Drop the lock here to allow ICE candidates to be
 	// added so that the agent can complete a connection
-	// TODO: without blocking we could keep the lock a bit longer
-	// until awaiting the handshake.
 	t.lock.Unlock()
 
 	var iceConn *ice.Conn
 	var err error
-	// TODO: depending on whether SPED is used, use the blocking/Nonblocking variant.
 	switch *role {
 	case ICERoleControlling:
-		iceConn, err = agent.DialNonBlocking(ctx,
+		iceConn, err = agent.StartDial(ctx,
 			params.UsernameFragment,
 			params.Password)
 
 	case ICERoleControlled:
-		iceConn, err = agent.AcceptNonBlocking(ctx,
+		iceConn, err = agent.StartAccept(ctx,
 			params.UsernameFragment,
 			params.Password)
 
 	default:
 		err = errICERoleUnknown
+	}
+
+	if err != nil {
+		t.lock.Lock()
+		return err
+	}
+
+	if !t.gatherer.api.settingEngine.enableSped {
+		// Note: this blocks until a pair is found.
+		err = agent.AwaitConnect(ctx)
 	}
 
 	// Reacquire the lock to set the connection/mux
