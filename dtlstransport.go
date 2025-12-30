@@ -14,6 +14,7 @@ import (
 	"crypto/x509"
 	"errors"
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -412,8 +413,8 @@ func (t *DTLSTransport) Start(remoteParameters DTLSParameters) error { //nolint:
 
 	// Configure ICE for SPED after we created the DTLS transport.
 	if t.api.settingEngine.enableSped {
-		t.iceTransport.SetDtlsCallback(func(packet []byte) {
-			dtlsConn.InjectPacket(packet)
+		t.iceTransport.SetDtlsCallback(func(packet []byte, rAddr net.Addr) {
+			dtlsConn.InjectPacket(packet, rAddr)
 		})
 	}
 

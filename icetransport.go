@@ -9,6 +9,7 @@ package webrtc
 import (
 	"context"
 	"fmt"
+	"net"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -40,7 +41,7 @@ type ICETransport struct {
 
 	loggerFactory logging.LoggerFactory
 
-	dtlsCallback func(packet []byte)
+	dtlsCallback func(packet []byte, rAddr net.Addr)
 
 	log logging.LeveledLogger
 }
@@ -194,7 +195,7 @@ func (t *ICETransport) Start(gatherer *ICEGatherer, params ICEParameters, role *
 	return nil
 }
 
-func (t *ICETransport) SetDtlsCallback(cb func(packet []byte)) {
+func (t *ICETransport) SetDtlsCallback(cb func(packet []byte, rAddr net.Addr)) {
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	if agent := t.gatherer.getAgent(); agent != nil {
