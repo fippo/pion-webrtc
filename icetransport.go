@@ -490,3 +490,15 @@ func (t *ICETransport) Piggyback(packet []byte) bool {
 
 	return agent.Piggyback(packet)
 }
+
+func (t *ICETransport) ReportDtlsPacket(packet []byte) {
+	t.lock.Lock()
+	defer t.lock.Unlock()
+
+	agent := t.gatherer.getAgent()
+	if agent == nil {
+		t.log.Warnf("%w: unable report DTLS packet", errICEAgentNotExist)
+		return
+	}
+	agent.ReportDtlsPacket(packet)
+}
