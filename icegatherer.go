@@ -194,6 +194,11 @@ func (g *ICEGatherer) resolveNAT1To1CandidateType() ice.CandidateType {
 }
 
 func (g *ICEGatherer) sanitizedMDNSMode() ice.MulticastDNSMode {
+	// Do not resolve or gather mDNS candidates with the relay policy.
+	if g.gatherPolicy == ICETransportPolicyRelay {
+		return ice.MulticastDNSModeDisabled
+	}
+
 	mode := g.api.settingEngine.candidates.MulticastDNSMode
 	if mode == ice.MulticastDNSModeDisabled || mode == ice.MulticastDNSModeQueryAndGather {
 		return mode

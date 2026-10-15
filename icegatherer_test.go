@@ -111,6 +111,26 @@ func TestICEGatherer_InvalidMDNSHostName(t *testing.T) {
 	assert.ErrorIs(t, err, ice.ErrInvalidMulticastDNSHostName)
 }
 
+func TestICEGatherer_MDNSModeWithRelayPolicy(t *testing.T) {
+	for _, mode := range []ice.MulticastDNSMode{
+		ice.MulticastDNSModeDisabled,
+		ice.MulticastDNSModeQueryOnly,
+		ice.MulticastDNSModeQueryAndGather,
+	} {
+		se := SettingEngine{}
+		se.SetICEMulticastDNSMode(mode)
+		api := NewAPI(WithSettingEngine(se))
+
+		gatherer, err := api.NewICEGatherer(ICEGatherOptions{ICEGatherPolicy: ICETransportPolicyRelay})
+		assert.NoError(t, err)
+		assert.Equal(t, ice.MulticastDNSModeDisabled, gatherer.sanitizedMDNSMode())
+
+		gatherer, err = api.NewICEGatherer(ICEGatherOptions{ICEGatherPolicy: ICETransportPolicyAll})
+		assert.NoError(t, err)
+		assert.Equal(t, mode, gatherer.sanitizedMDNSMode())
+	}
+}
+
 func TestLegacyNAT1To1AddressRewriteRules(t *testing.T) {
 	t.Run("empty", func(t *testing.T) {
 		assert.Empty(t, legacyNAT1To1AddressRewriteRules(nil, ice.CandidateTypeHost))
